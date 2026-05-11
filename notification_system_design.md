@@ -418,3 +418,4 @@ Logging:
 Output screenshot:
 
 ![Stage 6 terminal output](./stage6_terminal_output.png)
+![Stage 7 Frontedn Ui](./image.png)
