@@ -324,3 +324,66 @@ Best approach would be to
 Use Web Socket for real-time updates.
 Polling should be used as a last resort.
 
+
+# Stage 5
+Given implementation ->
+
+```js
+for student_id in student_ids:
+    send_email(student_id, message)
+    save_to_db(student_id, message)
+    push_to_app(student_id, message)
+```
+
+Problems->
+An incorrect e-mail may halt or stall the entire process.
+Excessive email/API calls for a single request - 50,000 students.
+In case of email success and failure to save to DB, data is inconsistent.
+Save DB successful, email failed – retry is difficult without a track of status.
+- HR will wait for too long the API's response.
+
+Now assume that 200 students attempted to use email, and that they lost their access to it midway through:
+
+Do not repeat all of the above.
+Remove deliveries that have failed, and the status 'failed'.
+- Only retest 200 students.
+If it fails we use `logging_middleware` to log the failure.
+
+Or better approch would be - >
+If it has already been saved to the DB, then save it again.
+Add Status of Student Delivery rows which are pending.
+- Place delivery orders in a queue.
+Delivers push notification and email in background (worker processes).
+- Make each row sent or failed.
+- Retry failed jobs.
+
+Don't make a single request for DB and email at the same time.
+
+because 
+The DB save will be quick and you will be able to test that a notification is created.
+Email is slow, and may fail due to external API problems.
+Background jobs make the system more faster than normal and more reliable.
+
+Revised pseudocode:
+
+```js
+function notify_all(student_ids, message):
+    notification_id = save_notification(message)
+
+    for student_id in student_ids:
+        save_delivery(notification_id, student_id, status="pending")
+        add_to_queue("send_notification", notification_id, student_id)
+
+    return "Notification accepted"
+
+worker send_notification_job(notification_id, student_id):
+    try:
+        send_email(student_id, notification_id)
+        push_to_app(student_id, notification_id)
+        update_delivery_status(notification_id, student_id, "sent")
+    except error:
+        update_delivery_status(notification_id, student_id, "failed")
+        retry_job(notification_id, student_id)
+```
+
+This implies that HR actions are carried out very fast, the API creating only records and enlisting jobs. Normal delivery will be performed in the background and it will work fine
