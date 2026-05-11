@@ -1,6 +1,10 @@
+import express from "express";
 import { Log, setAccessToken } from "../logging_middleware/src/index.js";
 
 process.loadEnvFile?.(".env");
+
+const app = express();
+const PORT = process.env.PORT || 3001;
 
 const API = process.env.NOTIFICATION_API_URL
   || "http://4.224.186.213/evaluation-service/notifications";
@@ -12,6 +16,17 @@ if (!token) {
 }
 
 setAccessToken(token);
+
+// CORS middleware
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 const weight = {
   Placement: 3,
@@ -88,11 +103,27 @@ async function safeLog(level, message) {
   }
 }
 
-async function main() {
+// Proxy endpoint for notifications
+app.get("/notifications", async (req, res) => {
   try {
-    await safeLog("info", "fetching notifications for priority inbox");
+    console.log("GET /notifications - params:", req.query);
+    await safeLog("info", "fetching notifications");
 
-    const response = await fetch(API, {
+    const params = new URLSearchParams();
+    
+    // Cap limit to 10 (external API constraint)
+    let limit = parseInt(req.query.limit || "10");
+    if (isNaN(limit) || limit > 10) limit = 10;
+    if (limit < 1) limit = 1;
+    params.set("limit", String(limit));
+    
+    if (req.query.page) params.set("page", req.query.page);
+    if (req.query.notification_type) params.set("notification_type", req.query.notification_type);
+
+    const url = `${API}?${params.toString()}`;
+    console.log("Proxying to:", url);
+    
+    const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -100,24 +131,61 @@ async function main() {
 
     if (!response.ok) {
       const body = await response.text();
+      console.error("External API error:", response.status, body);
       throw new Error(
         `failed to fetch notifications: ${response.status} ${response.statusText} ${body}`
       );
     }
 
     const data = await response.json();
-    const top10 = topNotifications(data.notifications, 10);
-
-    await safeLog("info", "priority inbox top 10 generated");
-    console.table(top10);
+    console.log("Fetched notifications count:", data.notifications?.length || 0);
+    await safeLog("info", `fetched ${data.notifications?.length || 0} notifications`);
+    res.json(data);
   } catch (error) {
     const message = error.cause?.message
       ? `${error.message}: ${error.cause.message}`
       : error.message;
 
+    console.error("Proxy error:", message);
     await safeLog("error", message);
-    console.error(message);
+    res.status(500).json({ error: message });
   }
-}
+});
 
-main();
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", message: "Backend is running" });
+});
+
+// Test endpoint to verify external API connectivity
+app.get("/test-api", async (req, res) => {
+  try {
+    console.log("Testing external API connectivity...");
+    const response = await fetch(API, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    
+    const isOk = response.ok;
+    const status = response.status;
+    const body = await response.text();
+    
+    res.json({
+      externalAPI: API,
+      status: status,
+      ok: isOk,
+      bodyPreview: body.substring(0, 200),
+      message: isOk ? "Successfully connected to external API" : "External API returned an error"
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      message: "Failed to connect to external API"
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(` Notification proxy server running on http://localhost:${PORT}`);
+});

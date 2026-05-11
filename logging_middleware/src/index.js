@@ -7,7 +7,7 @@ export function setAccessToken(token) {
 }
 
 export async function Log(stack, level, packageName, message) {
-  const token = accessToken || process.env.AFFORDMED_ACCESS_TOKEN;
+  const token = accessToken || globalThis.process?.env?.AFFORDMED_ACCESS_TOKEN;
 
   const response = await fetch(LOG_API, {
     method: "POST",
