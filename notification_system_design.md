@@ -260,3 +260,67 @@ CREATE INDEX idx_type_created_student
 ON notifications (notification_type, created_at DESC, student_id);
 ```
 
+# Stage 4
+
+ notifications are retrieved on each page load, x number of students, so lots of duplicate reads in the database.
+
+improvements ->
+
+## 1. Cache notifications
+
+Implement a Redis or in-memory cache for the counts of messages not read and the latest messages it helps.
+- Minimizes multiple database reads.
+- Quicker response from pupils.
+
+## 2. Use pagination
+
+Don't pull down all of the notifications.
+
+```http
+GET /api/notifications?limit=20&offset=0
+```
+
+it could help in 
+- Less data transferred.
+- Faster frontend loading.
+## 3. Only get the number of unread messages first.
+
+When the page is loaded, only fetch the count.
+
+```sql
+SELECT COUNT(*)
+FROM notifications
+WHERE student_id = 1042 AND is_read = false;
+```
+it help in 
+- Smaller query.
+- Full list can be loaded only when user opens notifications.
+
+## 4. New notifications will be sent using WebSocket.
+
+New notifications can be pushed live from backend without the need for frontend to repeatedly fetch.
+
+Benefits -> 
+- Reduces polling.
+Improved real-time user experience.
+
+proble can be 
+It is more difficult to scale WebSocket.
+- Needs reconnect handling.
+
+## 5. Continue to poll as a fallback.
+
+Use a polling loop instead of polling each time you load a page, if WebSocket is not successful.
+so that ->
+- Easy and dependable fall-back.
+
+but
+Still applies an intermittent load but less than fetching does when the page loads.
+
+Best approach would be to 
+- Optimize with DB queries.
+- Unread count/recent notifications in the cache.
+- Use pagination.
+Use Web Socket for real-time updates.
+Polling should be used as a last resort.
+
