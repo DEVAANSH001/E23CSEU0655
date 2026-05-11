@@ -195,3 +195,68 @@ WHERE notification_id = 1 AND user_id = 'user_1';
 - Old notifications can increase table size. Archive or delete old records.
 - Too many real-time connections can overload one server. Use WebSocket scaling with pub/sub later.
 - Large result sets can slow frontend loading. Use pagination with `limit` and `offset`.
+
+# Stage 3
+
+Given slow query:
+
+```sql
+SELECT *
+FROM notifications
+WHERE studentID = 1042 AND isRead = false
+ORDER BY createdAt ASC;
+```
+
+This query is not a great query 
+
+Problems- >
+- Column names should be consistent, like `student_id`, `is_read`, `created_at`.
+- `SELECT *` fetches unnecessary columns.
+- `ORDER BY createdAt ASC` shows oldest unread first. Usually latest notifications should come first.
+- With 5,000,000 notifications, this is slow without a proper index.
+
+We can  query like this->
+
+```sql
+SELECT id, title, message, notification_type, created_at
+FROM notifications
+WHERE student_id = 1042 AND is_read = false
+ORDER BY created_at DESC
+LIMIT 20;
+```
+
+and for index we can try like this:
+
+```sql
+CREATE INDEX idx_student_unread_created
+ON notifications (student_id, is_read, created_at DESC);
+```
+
+Time complexity worst case would be ->
+
+- Without index: database may scan many rows, close to `O(n)`.
+- With index: database can directly find unread notifications for one student, close to `O(log n + limit)`. (index usess b- tree / binary search )
+
+Adding indexes on every column is not good. as it could ->
+
+- Indexes need extra storage
+- Inserts and updates become slower
+- Unused indexes waste memory and maintenance time.
+- Indexes should match real query patterns, not every column.
+
+Find all students who got placement notifications in the last 7 days -
+
+```sql
+SELECT DISTINCT student_id
+FROM notifications
+WHERE notification_type = 'Placement'
+  AND created_at >= NOW() - INTERVAL '7 days';
+```
+
+index would be ->
+
+```sql
+CREATE INDEX idx_type_created_student
+ON notifications (notification_type, created_at DESC, student_id);
+```
+
