@@ -387,3 +387,34 @@ worker send_notification_job(notification_id, student_id):
 ```
 
 This implies that HR actions are carried out very fast, the API creating only records and enlisting jobs. Normal delivery will be performed in the background and it will work fine
+
+# Stage 6
+
+Priority Inbox code is in:
+
+```txt
+notification_app_be/main.js
+```
+
+Approach:
+
+- Fetch notifications from given API.
+- Give weight: `Placement = 3`, `Result = 2`, `Event = 1`.
+- Use a max heap by score.
+- Show top 10.
+
+For new notifications:
+
+- Push new notification into max heap.
+- Pop top 10 whenever Priority Inbox is needed.
+- This is better than sorting the full list every time.
+
+Logging:
+
+- The script logs when fetching starts.
+- It logs when top 10 is created.
+- It logs errors if API call fails.
+
+Output screenshot:
+
+![Stage 6 terminal output](./stage6_terminal_output.png)
