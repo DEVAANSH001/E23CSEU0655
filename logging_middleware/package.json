@@ -1,0 +1,19 @@
+{
+  "name": "@afford/logging-middleware",
+  "version": "1.0.0",
+  "description": "middleware for the AffordMed evaluation service.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "keywords": [
+    "logging",
+    "middleware",
+    "affordmed"
+  ]
+}
